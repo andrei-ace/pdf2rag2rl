@@ -1,0 +1,11 @@
+# GitHub repository
+git+https://github.com/THU-MIG/yolov10.git
+
+# Other dependencies
+pdf2image
+transformers
+pytesseract
+torch
+torch_geometric
+opencv-python-headless
+ultralytics
