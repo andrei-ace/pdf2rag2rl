@@ -1,5 +1,6 @@
 import pytesseract
 
+
 def ocr_elements(image_pil, boxes):
     elements = []
     for box in boxes:
