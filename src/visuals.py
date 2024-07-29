@@ -16,9 +16,7 @@ def visualize_graph(image_pil, nodes, edges):
     for idx, node in enumerate(nodes):
         box = node["bbox"]
         # Draw rectangle
-        cv2.rectangle(
-            image_cv, (box[0], box[1]), (box[2], box[3]), color=(0, 0, 255), thickness=2
-        )
+        cv2.rectangle(image_cv, (box[0], box[1]), (box[2], box[3]), color=(0, 0, 255), thickness=2)
         # Calculate the position for the text (upper right corner)
         text_position = (box[2], box[1] + 20)  # Adjust the offset as needed
         # Put text at the calculated position
@@ -54,12 +52,8 @@ def visualize_graph(image_pil, nodes, edges):
         cv2.line(image_cv, center_i, center_j, color=(0, 255, 0), thickness=2)
 
         # Draw dots at the ends of the edges
-        cv2.circle(
-            image_cv, center_i, radius=CIRCLE_RADIUS, color=(255, 0, 0), thickness=-1
-        )
-        cv2.circle(
-            image_cv, center_j, radius=CIRCLE_RADIUS, color=(255, 0, 0), thickness=-1
-        )
+        cv2.circle(image_cv, center_i, radius=CIRCLE_RADIUS, color=(255, 0, 0), thickness=-1)
+        cv2.circle(image_cv, center_j, radius=CIRCLE_RADIUS, color=(255, 0, 0), thickness=-1)
 
         # Mark this edge as drawn
         drawn_edges.add((edge[0], edge[1]))

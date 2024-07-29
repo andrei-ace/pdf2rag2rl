@@ -62,12 +62,8 @@ def min_distance_between_edges(box1, box2):
     ]
 
     # Calculate distances only if boxes are not overlapping
-    horizontal_distance = (
-        min(horizontal_distances) if left1 > right2 or left2 > right1 else 0
-    )
-    vertical_distance = (
-        min(vertical_distances) if top1 > bottom2 or top2 > bottom1 else 0
-    )
+    horizontal_distance = min(horizontal_distances) if left1 > right2 or left2 > right1 else 0
+    vertical_distance = min(vertical_distances) if top1 > bottom2 or top2 > bottom1 else 0
 
     # Euclidean distance if both horizontal and vertical distances are non-zero
     if horizontal_distance and vertical_distance:
@@ -128,11 +124,7 @@ def update_coordinates_and_merge_graphs(graphs_nodes_edges, images):
     # Concatenate all the node features, edges, and edge attributes
     combined_x = torch.cat(combined_x, dim=0)
     combined_edge_index = torch.cat(combined_edge_index, dim=1)
-    combined_edge_attr = (
-        torch.cat(combined_edge_attr, dim=0) if combined_edge_attr else None
-    )
+    combined_edge_attr = torch.cat(combined_edge_attr, dim=0) if combined_edge_attr else None
 
-    merged_graph = Data(
-        x=combined_x, edge_index=combined_edge_index, edge_attr=combined_edge_attr
-    )
+    merged_graph = Data(x=combined_x, edge_index=combined_edge_index, edge_attr=combined_edge_attr)
     return merged_graph, updated_nodes, updated_edges
