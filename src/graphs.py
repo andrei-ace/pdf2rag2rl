@@ -85,3 +85,54 @@ def get_edge_attributes(elem_i, elem_j):
     box_i = elem_i["bbox"]
     box_j = elem_j["bbox"]
     return [abs(box_i[0] - box_j[0]), abs(box_i[1] - box_j[1])]
+
+
+def update_coordinates_and_merge_graphs(graphs_nodes_edges, images):
+    # Initialize empty lists for combined node features, edges, and edge attributes
+    combined_x = []
+    combined_edge_index = []
+    combined_edge_attr = []
+    updated_nodes = []
+    updated_edges = []
+    total_height = 0
+
+    node_offset = 0
+    for (graph, nodes, edges), img in zip(graphs_nodes_edges, images):
+        x, edge_index, edge_attr = graph.x, graph.edge_index, graph.edge_attr
+
+        # Update node coordinates and add to combined list
+        for i, node in enumerate(nodes):
+            bbox = node["bbox"]
+            updated_bbox = [
+                bbox[0],
+                bbox[1] + total_height,
+                bbox[2],
+                bbox[3] + total_height,
+            ]
+            node["bbox"] = updated_bbox
+            updated_nodes.append(node)
+
+        # Add node features and edges to combined lists
+        combined_x.append(x)
+        combined_edge_index.append(edge_index + node_offset)
+        if edge_attr is not None:
+            combined_edge_attr.append(edge_attr)
+
+        # Update edge indices to account for node offset
+        for edge in edges:
+            updated_edges.append((edge[0] + node_offset, edge[1] + node_offset))
+
+        node_offset += x.size(0)
+        total_height += img.size[1]
+
+    # Concatenate all the node features, edges, and edge attributes
+    combined_x = torch.cat(combined_x, dim=0)
+    combined_edge_index = torch.cat(combined_edge_index, dim=1)
+    combined_edge_attr = (
+        torch.cat(combined_edge_attr, dim=0) if combined_edge_attr else None
+    )
+
+    merged_graph = Data(
+        x=combined_x, edge_index=combined_edge_index, edge_attr=combined_edge_attr
+    )
+    return merged_graph, updated_nodes, updated_edges
