@@ -1,3 +1,5 @@
+import torch
+
 from images import convert_pdf_to_images, vertically_append_images
 from detect_layout import detect_layout_elements
 from ocr import ocr_elements
@@ -20,7 +22,7 @@ graphs_nodes_edges = [create_graph(elements) for elements in ocr_results]
 merged_image = vertically_append_images(images)
 merged_graph, merged_nodes, merged_edges = update_coordinates_and_merge_graphs(graphs_nodes_edges, images)
 
-ppo = PPO()
+ppo = PPO("cuda" if torch.cuda.is_available() else "cpu")
 ppo.episode(merged_graph, merged_nodes, merged_edges)
 trajectory, merged_graph, merged_nodes, merged_edges = ppo.infer_trajectory(merged_graph, merged_nodes, merged_edges)
 print(trajectory)

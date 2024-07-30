@@ -15,7 +15,9 @@ def apply_action(graph, edges, action_name, node_pair):
     if action_name == "add":
         # Add edge to graph
         node1, node2 = node_pair
-        graph.edge_index = torch.cat([graph.edge_index, torch.tensor([[node1, node2], [node2, node1]])], dim=1)
+        graph.edge_index = torch.cat(
+            [graph.edge_index, torch.tensor([[node1, node2], [node2, node1]], device=graph.x.device)], dim=1
+        )
         edges.append((node1, node2))
         edges.append((node2, node1))
     elif action_name == "remove":
@@ -46,7 +48,9 @@ def revert_action(graph, edges, action_name, node_pair):
     elif action_name == "remove":
         # Add the previously removed edge
         node1, node2 = node_pair
-        graph.edge_index = torch.cat([graph.edge_index, torch.tensor([[node1, node2], [node2, node1]])], dim=1)
+        graph.edge_index = torch.cat(
+            [graph.edge_index, torch.tensor([[node1, node2], [node2, node1]], device=graph.x.device)], dim=1
+        )
         edges.append((node1, node2))
         edges.append((node2, node1))
 
@@ -57,7 +61,8 @@ def revert_action(graph, edges, action_name, node_pair):
 def sample_action(graph, add_net, remove_net, critic_net, action_probs):
     # Sample an action based on policy output
     actions = ["add", "remove", "stop"]
-    chosen_action_name = np.random.choice(actions, p=action_probs.squeeze().detach().numpy())
+    chosen_action_index = torch.multinomial(action_probs.squeeze(), 1).item()
+    chosen_action_name = actions[chosen_action_index]
 
     possible_add_pairs, possible_remove_pairs = get_possible_node_pairs(graph.x, graph.edge_index)
 
@@ -68,18 +73,19 @@ def sample_action(graph, add_net, remove_net, critic_net, action_probs):
             node2_emb = graph.x[pair[1]].unsqueeze(0)
             add_prob = add_net(node1_emb, node2_emb)
             add_probs.append(add_prob.item())
-        add_probs = torch.tensor(add_probs)
+        add_probs = torch.tensor(add_probs, device=graph.x.device)
         add_probs = torch.nn.functional.softmax(add_probs, dim=0)
-        chosen_idx = np.random.choice(len(possible_add_pairs), p=add_probs.squeeze().detach().numpy())
-        chosen_action = possible_add_pairs[chosen_idx]
+        chosen_idx = torch.multinomial(add_probs.squeeze(), 1).item()
+        chosen_action_pair = possible_add_pairs[chosen_idx]
         chosen_prob = action_probs[:, 0]
         # Compute and print critic value
-        node1_emb = graph.x[chosen_action[0]].unsqueeze(0)
-        node2_emb = graph.x[chosen_action[1]].unsqueeze(0)
+        node1_emb = graph.x[chosen_action_pair[0]].unsqueeze(0)
+        node2_emb = graph.x[chosen_action_pair[1]].unsqueeze(0)
+        one_hot = torch.tensor([1, 0, 0], device=graph.x.device).unsqueeze(0)
         critic_value = critic_net(
             graph.x,
             graph.edge_index,
-            torch.tensor([1, 0, 0]).unsqueeze(0),
+            one_hot,
             node1_emb,
             node2_emb,
             chosen_prob.unsqueeze(0),
@@ -91,34 +97,37 @@ def sample_action(graph, add_net, remove_net, critic_net, action_probs):
             node2_emb = graph.x[pair[1]].unsqueeze(0)
             remove_prob = remove_net(node1_emb, node2_emb)
             remove_probs.append(remove_prob.item())
-        remove_probs = torch.tensor(remove_probs)
+        remove_probs = torch.tensor(remove_probs, device=graph.x.device)
         remove_probs = torch.nn.functional.softmax(remove_probs, dim=0)
-        chosen_idx = np.random.choice(len(possible_remove_pairs), p=remove_probs.squeeze().detach().numpy())
-        chosen_action = possible_remove_pairs[chosen_idx]
+        chosen_idx = torch.multinomial(remove_probs.squeeze(), 1).item()
+        chosen_action_pair = possible_remove_pairs[chosen_idx]
         chosen_prob = action_probs[:, 1]
         # Compute and print critic value
-        node1_emb = graph.x[chosen_action[0]].unsqueeze(0)
-        node2_emb = graph.x[chosen_action[1]].unsqueeze(0)
+        node1_emb = graph.x[chosen_action_pair[0]].unsqueeze(0)
+        node2_emb = graph.x[chosen_action_pair[1]].unsqueeze(0)
+        one_hot = torch.tensor([0, 1, 0], device=graph.x.device).unsqueeze(0)
         critic_value = critic_net(
             graph.x,
             graph.edge_index,
-            torch.tensor([0, 1, 0]).unsqueeze(0),
+            one_hot,
             node1_emb,
             node2_emb,
             chosen_prob.unsqueeze(0),
         )
     else:
         chosen_action_name = "stop"
-        chosen_action = None
+        chosen_action_pair = None
         chosen_prob = action_probs[:, 2]
         # Compute and print critic value
+        placeholder = graph.x.mean(dim=0).unsqueeze(0)
+        one_hot = torch.tensor([0, 0, 1], device=graph.x.device).unsqueeze(0)
         critic_value = critic_net(
             graph.x,
             graph.edge_index,
-            torch.tensor([0, 0, 1]).unsqueeze(0),
-            graph.x.mean(dim=0).unsqueeze(0),
-            graph.x.mean(dim=0).unsqueeze(0),
+            one_hot,
+            placeholder,
+            placeholder,
             chosen_prob.unsqueeze(0),
         )
 
-    return chosen_action_name, chosen_action, chosen_prob, critic_value
+    return chosen_action_name, chosen_action_pair, chosen_prob, critic_value

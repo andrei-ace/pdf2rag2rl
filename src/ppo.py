@@ -7,7 +7,7 @@ from models import AddNetwork, CriticNetwork, PolicyNetwork, RemoveNetwork
 
 
 class PPO:
-    def __init__(self):
+    def __init__(self, device="cpu"):
         input_dim = EMBEDDING_DIM
         hidden_dim = 64
         projection_dim = 32
@@ -16,6 +16,11 @@ class PPO:
         self.remove_net = RemoveNetwork(input_dim, hidden_dim)
         self.policy_net = PolicyNetwork(input_dim, hidden_dim)
         self.critic_net = CriticNetwork(input_dim, hidden_dim, projection_dim)
+        self.device = torch.device(device)
+        self.add_net.to(self.device)
+        self.remove_net.to(self.device)
+        self.policy_net.to(self.device)
+        self.critic_net.to(self.device)
         # Initialize optimizer
         self.optimizer = torch.optim.Adam(
             list(self.add_net.parameters())
@@ -67,7 +72,8 @@ class PPO:
         return [0] * len(trajectory), graph, nodes, edges
 
     def episode(self, graph, nodes, edges):
-
+        # move graph on the device
+        graph = graph.to(self.device)
         # Set networks to evaluation mode for the episode
         self.policy_net.eval()
         self.critic_net.eval()
@@ -99,26 +105,33 @@ class PPO:
             graph, edges = revert_action(graph, edges, action_name, node_pair)
         return graph, nodes, edges
 
-    def compute_policy_loss(self, network, node1_emb, node2_emb, target, advantage):
+    def compute_policy_loss(self, network, node1_emb, node2_emb, advantage):
         prob = network(node1_emb, node2_emb)
+        target = (
+            torch.tensor([1.0], dtype=torch.float32, device=node1_emb.device)
+            if advantage > 0
+            else torch.tensor([0.0], device=node1_emb.device, dtype=torch.float32)
+        )
+        target = target.to(prob.device)  # Ensure the target is on the same device as prob
         bce_loss = F.binary_cross_entropy(prob, target)
-        # If advantage is positive, use regular BCE loss
-        # If advantage is negative, use 1 - BCE loss
-        adjusted_loss = torch.where(advantage > 0, bce_loss, 1 - bce_loss)
-        return adjusted_loss * advantage.abs()
+        return bce_loss * advantage.abs()
 
     def ppo_update(self, trajectory, advantages, returns, real_values, graph, nodes, edges, epsilon=0.2, epochs=10):
+        # move graph on the same device as the model
+        graph = graph.to(next(self.policy_net.parameters()).device)
         # Set networks to training mode for the update phase
         self.policy_net.train()
         self.critic_net.train()
         self.add_net.train()
         self.remove_net.train()
 
-        old_log_probs = torch.log(torch.tensor([prob for _, _, prob, _ in trajectory], dtype=torch.float32))
+        old_log_probs = torch.log(
+            torch.tensor([prob for _, _, prob, _ in trajectory], dtype=torch.float32, device=graph.x.device)
+        )
 
-        advantages = torch.tensor(advantages, dtype=torch.float32)
-        returns = torch.tensor(returns, dtype=torch.float32)
-        real_values = torch.tensor(real_values, dtype=torch.float32)
+        advantages = torch.tensor(advantages, dtype=torch.float32, device=graph.x.device)
+        returns = torch.tensor(returns, dtype=torch.float32, device=graph.x.device)
+        real_values = torch.tensor(real_values, dtype=torch.float32, device=graph.x.device)
 
         for _ in range(epochs):
             new_log_probs = []
@@ -131,29 +144,29 @@ class PPO:
 
                 if action_name == "stop":
                     prob = action_probs[0, 2]  # Assuming the stop action is represented by the third probability
-                    action_one_hot = torch.tensor([0, 0, 1], dtype=torch.float32)
+                    action_one_hot = torch.tensor([0, 0, 1], dtype=torch.float32, device=graph.x.device)
                     node1_emb = graph.x.mean(dim=0)  # Placeholder for stop action
                     node2_emb = graph.x.mean(dim=0)  # Placeholder for stop action
                 elif action_name == "add":
                     prob = action_probs[0, 0]  # Use the first probability for add action
-                    action_one_hot = torch.tensor([1, 0, 0], dtype=torch.float32)
+                    action_one_hot = torch.tensor([1, 0, 0], dtype=torch.float32, device=graph.x.device)
                     node1_emb = graph.x[node_pair[0]]
                     node2_emb = graph.x[node_pair[1]]
-                    target = torch.tensor([1.0], dtype=torch.float32)
-                    action_loss = self.compute_policy_loss(self.add_net, node1_emb, node2_emb, target, advantages[i])
+                    action_loss = self.compute_policy_loss(self.add_net, node1_emb, node2_emb, advantages[i])
                     action_losses.append(action_loss)
                 elif action_name == "remove":
                     prob = action_probs[0, 1]  # Use the second probability for remove action
-                    action_one_hot = torch.tensor([0, 1, 0], dtype=torch.float32)
+                    action_one_hot = torch.tensor([0, 1, 0], dtype=torch.float32, device=graph.x.device)
                     node1_emb = graph.x[node_pair[0]]
                     node2_emb = graph.x[node_pair[1]]
-                    target = torch.tensor([1.0], dtype=torch.float32)
-                    action_loss = self.compute_policy_loss(self.remove_net, node1_emb, node2_emb, target, advantages[i])
+                    action_loss = self.compute_policy_loss(self.remove_net, node1_emb, node2_emb, advantages[i])
                     action_losses.append(action_loss)
 
                 new_log_probs.append(torch.log(prob))
 
-                action_prob_tensor = torch.tensor([prob.item()], dtype=torch.float32).unsqueeze(0)
+                action_prob_tensor = torch.tensor([prob.item()], dtype=torch.float32, device=graph.x.device).unsqueeze(
+                    0
+                )
                 value = self.critic_net(
                     graph.x,
                     graph.edge_index,
