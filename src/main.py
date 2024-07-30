@@ -9,7 +9,7 @@ from visuals import visualize_graph
 pdf_path = "docs/examples/1706.03762v7.pdf"
 images = convert_pdf_to_images(pdf_path)
 
-images = images[:2]  # Process only the first page for now
+images = images[:1]  # Process only the first page for now
 
 # Example usage
 layout_boxes = [detect_layout_elements(image) for image in images]
@@ -22,5 +22,7 @@ merged_graph, merged_nodes, merged_edges = update_coordinates_and_merge_graphs(g
 
 ppo = PPO()
 ppo.episode(merged_graph, merged_nodes, merged_edges)
+trajectory, merged_graph, merged_nodes, merged_edges = ppo.infer_trajectory(merged_graph, merged_nodes, merged_edges)
+print(trajectory)
 
 visualize_graph(merged_image, merged_nodes, merged_edges)
