@@ -2,6 +2,7 @@ import torch
 import math
 from torch_geometric.data import Data
 from transformers import DistilBertTokenizer, DistilBertModel
+import hashlib
 
 HEURISTIC_THRESHOLD = 50
 EMBEDDING_DIM = 768
@@ -21,7 +22,6 @@ def get_text_embeddings(texts, tokenizer, model):
 def create_graph(elements, tokenizer=tokenizer, model=text_model):
     nodes = []
     edges = []
-    edge_attrs = []
 
     texts = [element[1] for element in elements]
     embeddings = get_text_embeddings(texts, tokenizer, model)
@@ -35,13 +35,11 @@ def create_graph(elements, tokenizer=tokenizer, model=text_model):
             if i != j:
                 if is_spatially_proximate(elem_i["bbox"], elem_j["bbox"]):
                     edges.append((i, j))
-                    edge_attrs.append(get_edge_attributes(elem_i, elem_j))
 
     x = torch.stack([node["embedding"] for node in nodes])
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
-    edge_attr = torch.tensor(edge_attrs, dtype=torch.float)
 
-    data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+    data = Data(x=x, edge_index=edge_index)
     return data, nodes, edges
 
 
@@ -128,3 +126,29 @@ def update_coordinates_and_merge_graphs(graphs_nodes_edges, images):
 
     merged_graph = Data(x=combined_x, edge_index=combined_edge_index, edge_attr=combined_edge_attr)
     return merged_graph, updated_nodes, updated_edges
+
+
+def tensor_to_tuple(tensor):
+    if isinstance(tensor, torch.Tensor):
+        return tuple(tensor.tolist())
+    return tensor
+
+
+def compute_graph_hash(graph, nodes, edges):
+    # Convert tensor attributes in nodes to tuples for consistent sorting
+    sorted_nodes = sorted(nodes, key=lambda x: tuple((k, tensor_to_tuple(v)) for k, v in sorted(x.items())))
+
+    # Convert edges to tuples if they are tensors
+    sorted_edges = sorted((tuple(edge) if isinstance(edge, torch.Tensor) else edge) for edge in edges)
+
+    # Create a string representation of the sorted nodes and edges
+    nodes_str = "".join([str(node) for node in sorted_nodes])
+    edges_str = "".join([str(edge) for edge in sorted_edges])
+
+    # Combine the graph features, sorted nodes, and sorted edges into a single string
+    combined_str = str(graph.x.tolist()) + nodes_str + edges_str
+
+    # Compute the hash value using SHA-256
+    hash_value = hashlib.sha256(combined_str.encode()).hexdigest()
+
+    return hash_value

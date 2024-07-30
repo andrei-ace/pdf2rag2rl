@@ -1,7 +1,5 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
-from copy import deepcopy
 
 
 def get_possible_node_pairs(x, edge_index):
@@ -13,52 +11,46 @@ def get_possible_node_pairs(x, edge_index):
     return possible_add_pairs, possible_remove_pairs
 
 
-def apply_action(graph, nodes, edges, action_name, action, prob):
-    updated_nodes = nodes.copy()
-    updated_edges = edges.copy()
-
+def apply_action(graph, edges, action_name, node_pair):
     if action_name == "add":
         # Add edge to graph
-        node1, node2 = action
+        node1, node2 = node_pair
         graph.edge_index = torch.cat([graph.edge_index, torch.tensor([[node1, node2], [node2, node1]])], dim=1)
-        updated_edges.append((node1, node2))
-        updated_edges.append((node2, node1))
+        edges.append((node1, node2))
+        edges.append((node2, node1))
     elif action_name == "remove":
         # Remove edge from graph
-        node1, node2 = action
+        node1, node2 = node_pair
         mask = ~(
             torch.logical_and(graph.edge_index[0] == node1, graph.edge_index[1] == node2)
             | torch.logical_and(graph.edge_index[0] == node2, graph.edge_index[1] == node1)
         )
         graph.edge_index = graph.edge_index[:, mask]
-        updated_edges.remove((node1, node2))
-        updated_edges.remove((node2, node1))
+        edges.remove((node1, node2))
+        edges.remove((node2, node1))
 
-    return graph, updated_nodes, updated_edges
+    return graph, edges
 
 
-def revert_action(graph, nodes, edges, action_name, action, prob):
-    reverted_nodes = nodes.copy()
-    reverted_edges = edges.copy()
-
+def revert_action(graph, edges, action_name, node_pair):
     if action_name == "add":
         # Remove the previously added edge
-        node1, node2 = action
+        node1, node2 = node_pair
         mask = ~(
             torch.logical_and(graph.edge_index[0] == node1, graph.edge_index[1] == node2)
             | torch.logical_and(graph.edge_index[0] == node2, graph.edge_index[1] == node1)
         )
         graph.edge_index = graph.edge_index[:, mask]
-        reverted_edges.remove((node1, node2))
-        reverted_edges.remove((node2, node1))
+        edges.remove((node1, node2))
+        edges.remove((node2, node1))
     elif action_name == "remove":
         # Add the previously removed edge
-        node1, node2 = action
+        node1, node2 = node_pair
         graph.edge_index = torch.cat([graph.edge_index, torch.tensor([[node1, node2], [node2, node1]])], dim=1)
-        reverted_edges.append((node1, node2))
-        reverted_edges.append((node2, node1))
+        edges.append((node1, node2))
+        edges.append((node2, node1))
 
-    return graph, reverted_nodes, reverted_edges
+    return graph, edges
 
 
 # Example usage
