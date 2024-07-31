@@ -1,10 +1,16 @@
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from actions import apply_action, revert_action, sample_action
-from graphs import EMBEDDING_DIM, compute_graph_hash
+from embeddings import EMBEDDING_DIM
+from graphs import compute_graph_hash
 from models import AddNetwork, CriticNetwork, PolicyNetwork, RemoveNetwork
+from rag import rag
 
+MIN_STEPS = 10
+MAX_STEPS = 20
+EPOCHS = 10
 
 class PPO:
     def __init__(self, device="cpu"):
@@ -49,7 +55,7 @@ class PPO:
 
         return advantages, returns
 
-    def collect_trajectory(self, graph, nodes, edges, min_steps=50, max_steps=100):
+    def collect_trajectory(self, graph, nodes, edges, min_steps=MIN_STEPS, max_steps=MAX_STEPS):
         trajectory = []
         for i in range(max_steps):
             action_probs = self.policy_net(graph.x, graph.edge_index)
@@ -67,13 +73,24 @@ class PPO:
         graph, nodes, edges = self.revert_graph(graph, nodes, edges, trajectory)
         return trajectory, graph, nodes, edges
 
-    def compute_real_values(self, trajectory, graph, nodes, edges):
-        # return a list of 0s for now
-        return [0] * len(trajectory), graph, nodes, edges
+    def compute_real_values(self, trajectory, graph, nodes, edges, questions_answers):
+        # walk through the trajectory and generate answers
+        real_values = []
+        for i, (action_name, node_pair, prob, _) in enumerate(trajectory):
+            if action_name == "stop":
+                break
+            graph, edges = apply_action(graph, edges, action_name, node_pair)
+            results = rag(graph, nodes, edges, questions_answers)
+            # compute the mean score of the generated answers
+            real_value = sum(score for _, _, score in results) / len(results)
+            real_values.append(real_value)
 
-    def episode(self, graph, nodes, edges):
-        # move graph on the device
-        graph = graph.to(self.device)
+        # reset the graph to the initial state
+        graph, nodes, edges = self.revert_graph(graph, nodes, edges, trajectory)
+
+        return real_values, graph, nodes, edges
+
+    def episode(self, graph, nodes, edges, questions_answers):
         # Set networks to evaluation mode for the episode
         self.policy_net.eval()
         self.critic_net.eval()
@@ -88,7 +105,9 @@ class PPO:
             advantages, returns = self.compute_advantages(trajectory)
             self.check_graph_hash(graph, nodes, edges, starting_value)
             # Compute the real values
-            real_values, graph, nodes, edges = self.compute_real_values(trajectory, graph, nodes, edges)
+            real_values, graph, nodes, edges = self.compute_real_values(
+                trajectory, graph, nodes, edges, questions_answers
+            )
             self.check_graph_hash(graph, nodes, edges, starting_value)
 
         # PPO update
@@ -116,7 +135,7 @@ class PPO:
         bce_loss = F.binary_cross_entropy(prob, target)
         return bce_loss * advantage.abs()
 
-    def ppo_update(self, trajectory, advantages, returns, real_values, graph, nodes, edges, epsilon=0.2, epochs=10):
+    def ppo_update(self, trajectory, advantages, returns, real_values, graph, nodes, edges, epsilon=0.2, epochs=EPOCHS):
         # move graph on the same device as the model
         graph = graph.to(next(self.policy_net.parameters()).device)
         # Set networks to training mode for the update phase
@@ -133,7 +152,7 @@ class PPO:
         returns = torch.tensor(returns, dtype=torch.float32, device=graph.x.device)
         real_values = torch.tensor(real_values, dtype=torch.float32, device=graph.x.device)
 
-        for _ in range(epochs):
+        for epoch in tqdm(range(epochs), desc="Training Progress"):
             new_log_probs = []
             new_values = []
             action_losses = []
@@ -208,7 +227,7 @@ class PPO:
 
         return graph, nodes, edges
 
-    def infer_trajectory(self, graph, nodes, edges, min_steps=10, max_steps=100):
+    def infer_trajectory(self, graph, nodes, edges, min_steps=MIN_STEPS, max_steps=MAX_STEPS):
         trajectory = []
         self.policy_net.eval()
         self.add_net.eval()

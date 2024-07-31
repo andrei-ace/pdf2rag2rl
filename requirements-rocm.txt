@@ -1,10 +1,11 @@
 # GitHub repository
 git+https://github.com/THU-MIG/yolov10.git
+git+https://github.com/pyg-team/pytorch_geometric.git
 
 # Other dependencies
+--extra-index-url https://download.pytorch.org/whl/rocm6.1
 torch
 accelerate
-torch_geometric
 transformers
 ultralytics
 matplotlib

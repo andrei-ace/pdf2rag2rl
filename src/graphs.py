@@ -1,30 +1,19 @@
 import torch
 import math
-from torch_geometric.data import Data
-from transformers import DistilBertTokenizer, DistilBertModel
 import hashlib
+from torch_geometric.data import Data
+
+from embeddings import get_text_embeddings
+
 
 HEURISTIC_THRESHOLD = 50
-EMBEDDING_DIM = 768
 
-# Load the text embedding model
-tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-text_model = DistilBertModel.from_pretrained("distilbert-base-uncased")
-
-
-def get_text_embeddings(texts, tokenizer, model):
-    inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
-    outputs = model(**inputs)
-    embeddings = outputs.last_hidden_state.mean(dim=1)  # Get the mean embeddings
-    return embeddings
-
-
-def create_graph(elements, tokenizer=tokenizer, model=text_model):
+def create_graph(elements):
     nodes = []
     edges = []
 
     texts = [element[1] for element in elements]
-    embeddings = get_text_embeddings(texts, tokenizer, model)
+    embeddings = get_text_embeddings(texts)
 
     for i, (element, embedding) in enumerate(zip(elements, embeddings)):
         box, text = element
@@ -152,3 +141,65 @@ def compute_graph_hash(graph, nodes, edges):
     hash_value = hashlib.sha256(combined_str.encode()).hexdigest()
 
     return hash_value
+
+
+def find_connected_components(edge_index, num_nodes):
+    parent = list(range(num_nodes))
+
+    def find(v):
+        if parent[v] != v:
+            parent[v] = find(parent[v])
+        return parent[v]
+
+    def union(v1, v2):
+        root1 = find(v1)
+        root2 = find(v2)
+        if root1 != root2:
+            parent[root2] = root1
+
+    for i in range(edge_index.size(1)):
+        union(edge_index[0, i].item(), edge_index[1, i].item())
+
+    components = {}
+    for node in range(num_nodes):
+        root = find(node)
+        if root not in components:
+            components[root] = []
+        components[root].append(node)
+
+    return list(components.values())
+
+
+def split_graph(graph, nodes, edges):
+    # Find connected components in the graph
+    components = find_connected_components(graph.edge_index, graph.num_nodes)
+
+    subgraphs = []
+    for component in components:
+        # Get node indices and edges for the subgraph
+        subgraph_nodes = component
+        subgraph_node_idx = {node: i for i, node in enumerate(subgraph_nodes)}
+        subgraph_edges = [
+            (subgraph_node_idx[u], subgraph_node_idx[v])
+            for u, v in edges
+            if u in subgraph_node_idx and v in subgraph_node_idx
+        ]
+
+        # Create the subgraph Data object
+        subgraph_x = graph.x[subgraph_nodes]
+        subgraph_edge_index = torch.tensor(subgraph_edges, dtype=torch.long).t().contiguous()
+        subgraph = Data(x=subgraph_x, edge_index=subgraph_edge_index)
+
+        # Create the subgraph's nodes and edges list
+        subgraph_nodes_list = [nodes[node] for node in subgraph_nodes]
+        subgraph_edges_list = subgraph_edges
+
+        subgraphs.append((subgraph, subgraph_nodes_list, subgraph_edges_list))
+
+    return subgraphs
+
+def extract_text_from_graph(graph, nodes, edges):
+    node_texts = [node["text"] for node in nodes if "text" in node]
+    # Concatenate all text into a single string
+    concatenated_text = " ".join(node_texts)
+    return concatenated_text

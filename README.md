@@ -1,5 +1,36 @@
 # Pdf2Rag2Rl
 
+# Install
+```
+sudo apt-get update
+sudo apt-get install tesseract-ocr
+```
+
+## AMD ROCm
+```
+pip install -r requirements-rocm.txt 
+```
+
+## CUDA and MPS
+```
+pip install -r requirements.txt 
+```
+
+# Running
+
+Login & obtain access to https://huggingface.co/meta-llama/Meta-Llama-3.1-8B
+```
+huggingface-cli login
+```
+
+If multiple GPUs:
+```
+export CUDA_VISIBLE_DEVICES=1
+```
+
+```
+python src/main.py
+```
 
 # References
 

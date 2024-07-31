@@ -8,7 +8,7 @@ OFFSET = 10
 CIRCLE_RADIUS = 5
 
 
-def visualize_graph(image_pil, nodes, edges):
+def visualize_graph(image_pil, nodes, edges, save_path=None):
     # Convert PIL image to OpenCV format
     image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
 
@@ -65,4 +65,18 @@ def visualize_graph(image_pil, nodes, edges):
     plt.figure(figsize=(12, 12))
     plt.imshow(image_pil)
     plt.axis("off")
-    plt.show()
+    
+    # Convert OpenCV image back to PIL format
+    image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+
+    # Display the image using matplotlib
+    plt.figure(figsize=(12, 12))
+    plt.imshow(image_pil)
+    plt.axis("off")
+    
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
+
+    plt.close()

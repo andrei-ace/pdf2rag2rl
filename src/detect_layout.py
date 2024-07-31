@@ -5,6 +5,7 @@ from ultralytics import YOLO
 
 def download_model_weights(url, save_path):
     if not os.path.exists(save_path):
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         response = requests.get(url)
         with open(save_path, "wb") as f:
             f.write(response.content)
