@@ -5,12 +5,27 @@ from embeddings import get_text_embeddings
 from graphs import extract_text_from_graph, split_graph
 
 model_id = "meta-llama/Meta-Llama-3.1-8B"
+tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
 pipeline = transformers.pipeline(
-    "text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto"
+    "text-generation",
+    model=model_id,
+    model_kwargs={"torch_dtype": torch.bfloat16},
+    device_map="auto",
+    tokenizer=tokenizer,
 )
 
 
-def generate_answer(question, context, min_new_tokens=8, max_new_tokens=512):
+def generate_answer(question, context, min_new_tokens=8, max_new_tokens=128, max_context_length=256):
+    # keep the context at maximum max_context_length tokens. Use the tokenizer to truncate the context
+    context = tokenizer(
+        context,
+        max_length=max_context_length,
+        return_tensors="pt",
+        truncation=True
+    )
+    # back to text
+    context = tokenizer.decode(context["input_ids"][0], skip_special_tokens=True)
+
     input_text = f"Using this context: {context}\n\nAnswer to the following question: {question}\n\nAnswer:"
     # Use beam search with a small number of beams to enforce brevity and relevance
     result = pipeline(
@@ -20,7 +35,7 @@ def generate_answer(question, context, min_new_tokens=8, max_new_tokens=512):
         min_new_tokens=min_new_tokens,
         num_beams=3,
         truncation=True,
-        pad_token_id=pipeline.tokenizer.eos_token_id,
+        pad_token_id=tokenizer.eos_token_id,
     )
     return result[0]["generated_text"].split("Answer:", 1)[1].strip()
 
