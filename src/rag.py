@@ -5,29 +5,24 @@ from embeddings import get_text_embeddings
 from graphs import extract_text_from_graph, split_graph
 
 model_id = "meta-llama/Meta-Llama-3.1-8B"
-prompt = (
-    "Respond concisely and relevantly, without further explanation."
-)
-
 pipeline = transformers.pipeline(
     "text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto"
 )
 
 
-def generate_answer(question, context, min_length=10, max_new_tokens=128):
-    input_text = f"{prompt}\n\nContext: {context}\n\nQuestion: {question}\n\nAnswer:"
+def generate_answer(question, context, min_new_tokens=64, max_new_tokens=512):
+    input_text = f"Using this context: {context}\n\nAnswer to the following question: {question}\n\nAnswer:"
     # Use beam search with a small number of beams to enforce brevity and relevance
     result = pipeline(
         input_text,
         max_new_tokens=max_new_tokens,
-        min_length=min_length,
         num_return_sequences=1,
+        min_new_tokens=min_new_tokens,
         num_beams=3,
-        early_stopping=True,
         truncation=True,
         pad_token_id=pipeline.tokenizer.eos_token_id,
     )
-    return result[0]["generated_text"].split("Answer:")[1].strip()
+    return result[0]["generated_text"].split("Answer:", 1)[1].strip()
 
 
 def retrieve_relevant_text(question_embedding, text_embeddings, texts, top_k=1):
@@ -64,6 +59,6 @@ def rag(graph, nodes, edges, questions_answers):
         relevant_text = retrieve_relevant_text(question_embedding, text_embeddings, texts, top_k=1)
         generated_answer = generate_answer(question, relevant_text)
         score = evaluate_answer(generated_answer, provided_answer)
-        results.append((question, generated_answer, score))
+        results.append((question, provided_answer, generated_answer, score))
 
     return results

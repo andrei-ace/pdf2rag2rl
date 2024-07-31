@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-from tqdm import tqdm
 
 from actions import apply_action, revert_action, sample_action
 from embeddings import EMBEDDING_DIM
@@ -9,7 +8,7 @@ from models import AddNetwork, CriticNetwork, PolicyNetwork, RemoveNetwork
 from rag import rag
 
 MIN_STEPS = 10
-MAX_STEPS = 20
+MAX_STEPS = 50
 EPOCHS = 10
 
 class PPO:
@@ -76,13 +75,13 @@ class PPO:
     def compute_real_values(self, trajectory, graph, nodes, edges, questions_answers):
         # walk through the trajectory and generate answers
         real_values = []
-        for i, (action_name, node_pair, prob, _) in enumerate(trajectory):
+        for i, (action_name, node_pair, _, _) in enumerate(trajectory):
             if action_name == "stop":
                 break
             graph, edges = apply_action(graph, edges, action_name, node_pair)
             results = rag(graph, nodes, edges, questions_answers)
             # compute the mean score of the generated answers
-            real_value = sum(score for _, _, score in results) / len(results)
+            real_value = sum(score for _, _, _, score in results) / len(results)
             real_values.append(real_value)
 
         # reset the graph to the initial state
@@ -152,7 +151,7 @@ class PPO:
         returns = torch.tensor(returns, dtype=torch.float32, device=graph.x.device)
         real_values = torch.tensor(real_values, dtype=torch.float32, device=graph.x.device)
 
-        for epoch in tqdm(range(epochs), desc="Training Progress"):
+        for _ in range(epochs):
             new_log_probs = []
             new_values = []
             action_losses = []

@@ -1,7 +1,9 @@
 import os
 import shutil
+import warnings
 import torch
-import joblib
+from tqdm import tqdm
+import joblib  # type: ignore
 
 from images import convert_pdf_to_images, vertically_append_images
 from detect_layout import detect_layout_elements
@@ -16,15 +18,22 @@ device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is
 
 EPOCHS = 4
 # Define a cache directory
-CACHE_DIR = '__cache__'
+CACHE_DIR = "__cache__"
 
 # Ensure the cache directory exists
 os.makedirs(CACHE_DIR, exist_ok=True)
+if os.path.exists("docs/output"):
+    shutil.rmtree("docs/output")
+os.makedirs("docs/output", exist_ok=True)
+
+# Suppress the specific FutureWarning
+warnings.filterwarnings("ignore", message="You are using `torch.load` with `weights_only=False`")
+
 
 def cache_results(cache_key, func, *args, **kwargs):
     # Generate a cache file path
-    cache_file = os.path.join(CACHE_DIR, f'{cache_key}.pkl')
-    
+    cache_file = os.path.join(CACHE_DIR, f"{cache_key}.pkl")
+
     if os.path.exists(cache_file):
         # Load results from cache
         return joblib.load(cache_file)
@@ -33,7 +42,8 @@ def cache_results(cache_key, func, *args, **kwargs):
         results = func(*args, **kwargs)
         joblib.dump(results, cache_file)
         return results
-    
+
+
 # Function to process the PDF and return the results
 def process_pdf(pdf_path):
     images = convert_pdf_to_images(pdf_path)
@@ -44,12 +54,13 @@ def process_pdf(pdf_path):
     merged_image = vertically_append_images(images)
     return merged_graph, merged_nodes, merged_edges, merged_image
 
+
 def infer_pdf(pdf_entry, ppo, device=device):
     (pdf_path, questions_answers) = pdf_entry
     cache_key = os.path.basename(pdf_path)  # or generate a unique key based on pdf_path
     merged_graph, merged_nodes, merged_edges, merged_image = cache_results(cache_key, process_pdf, pdf_path)
     merged_graph = merged_graph.to(device)
-    
+
     save_path = "docs/output/no_trainig.png"
     if ppo is not None:
         # This will change the graph in place r
@@ -59,9 +70,10 @@ def infer_pdf(pdf_entry, ppo, device=device):
         save_path = "docs/output/with_trainig.png"
     visualize_graph(merged_image, merged_nodes, merged_edges, save_path=save_path)
     results = rag(merged_graph, merged_nodes, merged_edges, questions_answers)
-    for question, answer, score in results:
-        print(f"Question: {question}\nGenerated Answer: {answer}\nScore: {score}\n")
-    mean_score = sum([score for _, _, score in results]) / len(results)
+    for question, answer, generated_answer, score in results:
+        print(f"Question: {question}\nProvided Answer:{answer}\nGenerated Answer: {generated_answer}\nScore: {score}")
+        print("-" * 50)
+    mean_score = sum([score for _, _, _, score in results]) / len(results)
     return mean_score
 
 
@@ -76,27 +88,11 @@ def train_pdf(pdf_entry, ppo, device=device):
 print(f"Using device info: {torch.cuda.get_device_properties(0)}")
 
 ppo = PPO(device=device)
-for _ in range(EPOCHS):
-    for pdf_entry in PDFS:
+for _ in tqdm(range(EPOCHS), desc="Training PPO"):
+    for pdf_entry in PDFS[:-1]:
         train_pdf(pdf_entry, ppo)
-
-if os.path.exists("docs/output"):
-    shutil.rmtree("docs/output")
-os.makedirs("docs/output", exist_ok=True)
-mean_score_notrain = infer_pdf(PDFS[0], None)
-mean_score_withtrain = infer_pdf(PDFS[0], ppo)
-
-print(f"Mean scores no training: {mean_score_notrain:.4f} vs with trainig: {mean_score_withtrain:.4f}\n")
-
-
-# subgraphs = split_graph(merged_graph, merged_nodes, merged_edges)
-
-# # delete and recreate the output directory
-# if os.path.exists("docs/output"):
-#     shutil.rmtree("docs/output")
-# os.makedirs("docs/output", exist_ok=True)
-
-# for i, (subgraph, nodes, edges) in enumerate(subgraphs):
-#     visualize_graph(merged_image, nodes, edges, save_path=f"docs/output/subgraph-{i}.png")
-
-# visualize_graph(merged_image, merged_nodes, merged_edges, save_path="docs/output/all.png")
+    mean_score_notrain = infer_pdf(PDFS[-1], None)
+    mean_score_withtrain = infer_pdf(PDFS[-1], ppo)
+    print("-" * 50)
+    print(f"Mean scores no training: {mean_score_notrain:.4f} vs with trainig: {mean_score_withtrain:.4f}")
+    print("-" * 50)

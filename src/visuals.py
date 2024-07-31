@@ -61,16 +61,13 @@ def visualize_graph(image_pil, nodes, edges, save_path=None):
     # Convert OpenCV image back to PIL format
     image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
 
-    # Display the image using matplotlib
-    plt.figure(figsize=(12, 12))
-    plt.imshow(image_pil)
-    plt.axis("off")
-    
-    # Convert OpenCV image back to PIL format
-    image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+    image_pil_width, image_pil_height = image_pil.size
+    ratio = image_pil_height / image_pil_width
 
     # Display the image using matplotlib
-    plt.figure(figsize=(12, 12))
+    # make the figure tall enough to display the full
+    # image without squishing it
+    plt.figure(figsize=(12, int(12 * ratio)))
     plt.imshow(image_pil)
     plt.axis("off")
     

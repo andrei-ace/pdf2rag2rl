@@ -1,3 +1,4 @@
+![Logo](docs/logo.png)
 # Pdf2Rag2Rl
 
 # Install
@@ -31,6 +32,8 @@ export CUDA_VISIBLE_DEVICES=1
 ```
 python src/main.py
 ```
+First epoch:
+![Running](docs/running.png)
 
 # References
 
@@ -60,4 +63,9 @@ BibTeX
 YOLOv10 trained on DocLayNet dataset
 ```
 https://github.com/moured/YOLOv10-Document-Layout-Analysis
+```
+
+## Meta Llama 3.1
+```
+https://huggingface.co/meta-llama/Meta-Llama-3.1-8B
 ```

@@ -1,4 +1,5 @@
 import os
+import warnings
 import requests
 from ultralytics import YOLO
 
@@ -19,6 +20,9 @@ weights_url = (
 weights_path = "models/yolov10x_best.pt"
 
 download_model_weights(weights_url, weights_path)
+warnings.filterwarnings(
+    "ignore", message="You are using `torch.load` with `weights_only=False`", module="ultralytics.nn.tasks"
+)
 # Load the YOLOv10 model
 model = YOLO(weights_path)
 

@@ -6,7 +6,7 @@ from torch_geometric.data import Data
 from embeddings import get_text_embeddings
 
 
-HEURISTIC_THRESHOLD = 50
+HEURISTIC_THRESHOLD = 30
 
 def create_graph(elements):
     nodes = []
