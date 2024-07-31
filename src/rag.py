@@ -10,7 +10,7 @@ pipeline = transformers.pipeline(
 )
 
 
-def generate_answer(question, context, min_new_tokens=64, max_new_tokens=512):
+def generate_answer(question, context, min_new_tokens=8, max_new_tokens=512):
     input_text = f"Using this context: {context}\n\nAnswer to the following question: {question}\n\nAnswer:"
     # Use beam search with a small number of beams to enforce brevity and relevance
     result = pipeline(
