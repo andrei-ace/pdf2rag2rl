@@ -32,7 +32,12 @@ export CUDA_VISIBLE_DEVICES=1
 ```
 python src/main.py
 ```
-First epoch:
+After 4 epochs
+![End](docs/end.png)
+```
+Mean scores no training: 0.8213 vs with trainig: 0.8402
+``` 
+Resource utilization
 ![Running](docs/running.png)
 
 # References
