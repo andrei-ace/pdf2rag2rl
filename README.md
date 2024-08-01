@@ -40,6 +40,9 @@ Mean scores no training: 0.8213 vs with trainig: 0.8402
 Resource utilization
 ![Running](docs/running.png)
 
+Graph(part) visualization
+![Graph](docs/graph.png)
+
 # References
 
 ## YOLOv10
